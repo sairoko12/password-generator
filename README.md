@@ -1,8 +1,8 @@
-## Password generator
+# Password generator
 
 Script that create secure passwords with multiple options
 
-### Usage
+## Usage
 
 ```python
 from generator import PasswordGenerator
@@ -32,5 +32,3 @@ options = {
 password = PasswordGenerator(length_of_password, **options)
 print(password.get())
 ```
-
-#### Made with ❤️

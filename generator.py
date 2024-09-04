@@ -1,91 +1,69 @@
-# -*- coding: utf-8 -*-
-import random
+import secrets
 import re
+from dataclasses import dataclass, field
+from typing import Optional
 
 
-class PasswordGenerator:
-    def __init__(self, length, **kwargs):
-        self.length = length
-        self.available_chars = {
-            'lower': "abcdefghijklmnopqrstuvwxyz",
-            'upper': "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-            'numbers': "1234567890",
-            'symbols': "!$%&@=._-"
-        }
+@dataclass
+class PasswordGenerator(object):
+    length: int
+    lower: Optional[bool] = True
+    upper: Optional[bool] = True
+    numbers: Optional[bool] = True
+    symbols: Optional[bool] = True
 
-        self.base_string = self.prepare_base_string(**kwargs)
-        self.regex = self.build_regex(**kwargs)
+    _pattern: str = field(init=False)
+    _base_string: str = field(init=False)
+    _available_chars: dict = field(default_factory=lambda: {
+        'lower': 'abcdefghijklmnopqrstuvwxyz',
+        'upper': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+        'numbers': '1234567890',
+        'symbols': '!$%&@=._-,~≠/?+*#',
+    })
 
-    def prepare_base_string(self, **kwargs):
-        base_string = []
+    def __post_init__(self):
+        if not any([self.lower, self.upper, self.numbers, self.symbols]):
+            raise ValueError(
+                'At least one of the options (lower, upper, numbers, or symbols) must be True.'
+            )
 
-        for option in self.available_chars:
-            if kwargs.get(option, True):
-                base_string.append(self.available_chars[option])
+        self._pattern = self._build_pattern()
+        self._base_string = self._prepare_base_string()
 
-        return "".join(base_string)
+    def _prepare_base_string(self) -> str:
+        return ''.join(chars for key, chars in self._available_chars.items() if getattr(self, key))
 
-    def build_regex(self, **kwargs):
-        must_lower = kwargs.get('must_lower', False)
-        must_upper = kwargs.get('must_upper', False)
-        must_number = kwargs.get('must_number', False)
-        must_symbols = kwargs.get('must_symbols', False)
+    def _build_pattern(self) -> str:
+        pattern = ''
+        if self.lower:
+            pattern += '(?=.*[a-z])'
+        if self.upper:
+            pattern += '(?=.*[A-Z])'
+        if self.numbers:
+            pattern += '(?=.*[0-9])'
+        if self.symbols:
+            pattern += '(?=.*[!$%&@=._-])'
+        return pattern
 
-        symbols_regex = "[{}]".format(
-            self.available_chars['symbols'])
-        regex = None
+    def _generate_password(self) -> str:
+        password = []
+        if self.lower:
+            password.append(secrets.choice(self._available_chars['lower']))
+        if self.upper:
+            password.append(secrets.choice(self._available_chars['upper']))
+        if self.numbers:
+            password.append(secrets.choice(self._available_chars['numbers']))
+        if self.symbols:
+            password.append(secrets.choice(self._available_chars['symbols']))
 
-        if must_symbols and (
-                must_lower is False and
-                must_upper is False and
-                must_number is False):
-            regex = symbols_regex
-        elif must_lower or must_upper or must_number:
-            regex = "[{opts}]"
-            opts = []
+        while len(password) < self.length:
+            password.append(secrets.choice(self._base_string))
 
-            if must_lower and kwargs.get('lower', True):
-                opts.append("a-z")
+        secrets.SystemRandom().shuffle(password)
+        return ''.join(password)
 
-            if must_upper and kwargs.get('upper', True):
-                opts.append("A-Z")
-
-            if must_number and kwargs.get('numbers', True):
-                opts.append("0-9")
-
-            if len(opts) > 0:
-                items = "".join(opts)
-
-                if not must_symbols:
-                    regex = regex.format(opts=items)
-                else:
-                    regex = "[{opts}]{symbols}" \
-                        .format(opts=items, symbols=symbols_regex)
-            else:
-                regex = None
-
-        return regex
-
-    def get(self):
-        if self.regex is not None:
-            pattern = re.compile(self.regex)
-            tries = 0
-
-            while True:
-                tries += 1
-                result = "".join([
-                    self.base_string[
-                        random.randint(0,
-                                       (len(self.base_string) - 1))
-                    ] for i in range(0, self.length)])
-
-                if pattern.match(result) or tries > 1000:
-                    break
-
-            return result
-        else:
-            return "".join([
-                self.base_string[
-                    random.randint(0,
-                                   (len(self.base_string) - 1))
-                ] for i in range(0, self.length)])
+    def get(self) -> str:
+        while True:
+            result = self._generate_password()
+            if not self._pattern or re.match(self._pattern, result):
+                return result
